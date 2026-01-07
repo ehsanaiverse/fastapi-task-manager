@@ -8,6 +8,7 @@ from app.admin.taskRoutes import router as admin_task
 from app.routers.users import router as user_account
 from app.routers.tasks import router as user_task
 from app.admin.admin import create_default_admin
+from app.notification.manager import router as webSocket_router
 
 # load env FIRST
 load_dotenv()
@@ -28,3 +29,8 @@ app.include_router(user_account, prefix="/users", tags=["User"])
 app.include_router(user_task, prefix="/tasks", tags=["Task"])
 app.include_router(admin_user, prefix="/admin", tags=["Admin-User"])
 app.include_router(admin_task, prefix="/admin", tags=["Admin-Task"])
+app.include_router(webSocket_router, prefix="/socket", tags=["WebSocket"])
+
+if __name__=="__main__":
+    import uvicorn
+    uvicorn.run(app=app)

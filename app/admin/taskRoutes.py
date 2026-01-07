@@ -5,6 +5,7 @@ from app.db.dependency import get_db
 from app.model.task import Task
 from app.core.auth import required_role
 from app.schemas.tasks import UpdateTask, CreateTask
+from app.notification.manager import manager
 
 router = APIRouter()
 
@@ -12,7 +13,7 @@ router = APIRouter()
 VALID_STATUS = {'pending', 'completed'}
 
 @router.post('/create')
-def create_task(task: CreateTask,
+async def create_task(task: CreateTask,
                 db: Session = Depends(get_db),
                 current_user: dict = Depends(required_role('admin'))
 ):
@@ -37,6 +38,7 @@ def create_task(task: CreateTask,
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
+    await manager.send_personal_message(message="task created")
     
     return {
         "message": "Admin created task successfully ",
