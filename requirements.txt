@@ -34,3 +34,5 @@ typing_extensions
 tzdata
 uvicorn
 websockets
+smtplib
+email
