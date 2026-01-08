@@ -41,21 +41,18 @@ async def create_task(task: CreateTask,
     
     notification_meassage = Notification(
         user_id = current_user["user_id"],
-        message = "New task created."
+        message = "New task created.",
+        is_read = False
     )
-    
     
     db.add(notification_meassage)
     db.commit()
     db.refresh(notification_meassage)
     
-    
-    
     await manager.send_to_user(
         user_id=current_user["user_id"],
         message="Task created successfully"
     )
-    
     
     return {
         "message": "Task created successfully",
