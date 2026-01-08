@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 from app.model.task import Task
+from app.model.notification import Notification
 from app.db.dependency import get_db
 from app.schemas.tasks import CreateTask, UpdateTask
 from app.core.auth import get_current_user, required_role
@@ -37,11 +40,26 @@ async def create_task(task: CreateTask,
     db.commit()
     db.refresh(new_task)
     
+    
+    notification_meassage = Notification(
+        user_id = current_user["user_id"],
+        message = f"New task '{new_task.task_name}' created."
+    )
+    
+    
+    db.add(notification_meassage)
+    db.commit()
+    db.refresh(notification_meassage)
+    
+    
+    
     await manager.send_to_user(
         user_id=current_user["user_id"],
         message="Task created successfully"
     )
-
+    
+    
+    
     return {
         "message": "Task created successfully",
         "task_id": new_task.task_id,
