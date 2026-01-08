@@ -25,17 +25,3 @@ class ConnectionManager:
             await websocket.send_text(message)
 
 manager = ConnectionManager()
-
-@router.get("/")
-async def get():
-    return {"message": "Notification WebSocket endpoint"}
-
-
-@router.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: int):
-    await manager.connect(user_id, websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(user_id)
