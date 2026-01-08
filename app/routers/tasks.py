@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 from app.model.task import Task
@@ -32,8 +31,7 @@ async def create_task(task: CreateTask,
         task_name = task.task_name,
         task_description = task.task_description,
         task_status = task.task_status,
-        user_id = current_user["user_id"]
-        
+        user_id = current_user["user_id"]   
     )
     
     db.add(new_task)
@@ -43,7 +41,7 @@ async def create_task(task: CreateTask,
     
     notification_meassage = Notification(
         user_id = current_user["user_id"],
-        message = f"New task '{new_task.task_name}' created."
+        message = "New task created."
     )
     
     
@@ -59,13 +57,11 @@ async def create_task(task: CreateTask,
     )
     
     
-    
     return {
         "message": "Task created successfully",
         "task_id": new_task.task_id,
         "user_id": current_user["user_id"]
     }
-
 
 
 
@@ -94,7 +90,7 @@ def view_task(db: Session = Depends(get_db),
 
 # update endpoint
 @router.put('/update/{task_id}')
-def update_task(task_id: int, task_update: UpdateTask,
+async def update_task(task_id: int, task_update: UpdateTask,
                 db: Session = Depends(get_db),
                 current_user: dict = Depends(get_current_user)):
     
@@ -120,6 +116,20 @@ def update_task(task_id: int, task_update: UpdateTask,
     db.commit()
     db.refresh(existing_task)
     
+    notification_meassage = Notification(
+        user_id = current_user["user_id"],
+        message = "Task updated."
+    )
+    
+    db.add(notification_meassage)
+    db.commit()
+    db.refresh(notification_meassage)
+    
+    await manager.send_to_user(
+        user_id=current_user["user_id"],
+        message="Task updated successfully"
+    )
+    
     return {
         'message': 'Task successfully updated'}
     
@@ -127,7 +137,7 @@ def update_task(task_id: int, task_update: UpdateTask,
 
 
 @router.delete('/delete/{task_id}')
-def delete_task(task_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+async def delete_task(task_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     
     existing_task = db.query(Task).filter(Task.task_id == task_id).first()
     
@@ -137,6 +147,20 @@ def delete_task(task_id: int, db: Session = Depends(get_db), current_user: dict 
     db.delete(existing_task)
     
     db.commit()
-    db.refresh()
+    # db.refresh(existing_task)
+    
+    notification_meassage = Notification(
+        user_id = current_user["user_id"],
+        message = "Task deleted."
+    )
+    
+    db.add(notification_meassage)
+    db.commit()
+    db.refresh(notification_meassage)
+    
+    await manager.send_to_user(
+        user_id=current_user["user_id"],
+        message="Task deleted successfully"
+    )
     
     return {"message": "Task successfully deleted"}
