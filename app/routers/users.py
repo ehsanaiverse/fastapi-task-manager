@@ -3,9 +3,11 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
 from app.model.user import User
+from app.model.notification import Notification
 from app.db.dependency import get_db
 from app.schemas.users import RegistorUsers, LoginUser, ChangePassword, ForgetPassword, VerifyOTP
-from app.core.auth import create_token, get_current_user, hashed_password, verify_password, gen_otp, required_role
+from app.core.auth import create_token, get_current_user, hashed_password, verify_password, gen_otp
+from app.notification.manager import manager
 
 SECRET_KEY = "This is my secret key"
 ALGORITHM = "HS256"
@@ -15,7 +17,7 @@ router = APIRouter()
 
 # register user
 @router.post("/register")
-def register(user: RegistorUsers, db: Session = Depends(get_db)):
+async def register(user: RegistorUsers, db: Session = Depends(get_db)):
     
     # fitch data from the database check is user already exist
     user_exist = db.query(User).filter(User.email == user.email).first()
@@ -33,45 +35,75 @@ def register(user: RegistorUsers, db: Session = Depends(get_db)):
     
     # add user record into table
     db.add(new_user)
-    
-    
     # save data
     db.commit()
-    
     db.refresh(new_user)
+    
+    # create notification unread
+    notification_meassage = Notification(
+        user_id = new_user.id,
+        message = "New user registored",
+        is_read = False
+    )
+    
+    db.add(notification_meassage)
+    db.commit()
+    
+    # send realtime notification
+    await manager.send_to_user(
+        user_id=new_user.id,
+        message="New user registored successfully"
+    )
 
     return {
         "message": "User registered successfully",
         "name": new_user.username}
 
 
-
-# User login
+# login route
 @router.post("/login")
-def login(user: LoginUser, db: Session = Depends(get_db)):
+async def login(user: LoginUser, db: Session = Depends(get_db)):
 
-    # fitch data from the database
+    # find user
     user_db = db.query(User).filter(User.email == user.email).first()
 
-    # verify password 
+    # check password
     if not user_db or not verify_password(user.password, user_db.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    
+    # create token
     payload = {
-        'email': user_db.email,
-        'user_id': user_db.id,
-        'username': user_db.username,
-        'role': user_db.role,
-        'exp': datetime.utcnow() + timedelta(hours=1)
+        "email": user_db.email,
+        "user_id": user_db.id,
+        "username": user_db.username,
+        "role": user_db.role,
+        "exp": datetime.utcnow() + timedelta(hours=1)
     }
+
     access_token = create_token(data=payload)
-   
+
+    # save notification (unread)
+    notification_message = Notification(
+        user_id=user_db.id,
+        message="User logged in",
+        is_read=False
+    )
+
+    db.add(notification_message)
+    db.commit()
+    db.refresh(notification_message)
+
+    # send realtime notification (only if user is connected)
+    await manager.send_to_user(
+        user_id=user_db.id,
+        message="Login successful"
+    )
 
     return {
         "access_token": access_token,
         "token_type": "bearer"
     }
+
 
 
 
@@ -90,7 +122,7 @@ def profile(current_user: dict = Depends(get_current_user)):
 
 # user change password
 @router.post('/change')
-def change_password(user: ChangePassword, db: Session = Depends(get_db)):
+async def change_password(user: ChangePassword, db: Session = Depends(get_db)):
 
     # fitch data from database
     user_db = db.query(User).filter(User.email == user.email).first()
@@ -106,6 +138,25 @@ def change_password(user: ChangePassword, db: Session = Depends(get_db)):
         # save update in database
         db.commit()
         
+        
+        # save notification (unread)
+        notification_message = Notification(
+            user_id=user_db.id,
+            message="Password updated",
+            is_read=False
+        )
+
+        db.add(notification_message)
+        db.commit()
+        db.refresh(notification_message)
+
+        # send realtime notification (only if user is connected)
+        await manager.send_to_user(
+            user_id=user_db.id,
+            message="Password update"
+        )
+        
+        
         return {"message": "Password changed successfully"}
     
     raise HTTPException(status_code=404, detail='User not found')
@@ -115,7 +166,7 @@ def change_password(user: ChangePassword, db: Session = Depends(get_db)):
             
 # user forget password
 @router.post('/forget')
-def forget_password(user: ForgetPassword, db: Session = Depends(get_db)):
+async def forget_password(user: ForgetPassword, db: Session = Depends(get_db)):
     
     existing_user = db.query(User).filter(User.email == user.email).first()
     
@@ -124,11 +175,28 @@ def forget_password(user: ForgetPassword, db: Session = Depends(get_db)):
     
     otp = gen_otp()
     
-    
     # assign otp to existing user
     existing_user.otp = otp
     
     db.commit()
+    
+    
+    # save notification (unread)
+    notification_message = Notification(
+        user_id=existing_user.id,
+        message="Password forgeted",
+        is_read=False
+    )
+
+    db.add(notification_message)
+    db.commit()
+    db.refresh(notification_message)
+
+    # send realtime notification (only if user is connected)
+    await manager.send_to_user(
+        user_id=existing_user.id,
+        message="Password foget successful"
+    )
     
     return {
         "message": "OTP sent successfully",
@@ -140,7 +208,7 @@ def forget_password(user: ForgetPassword, db: Session = Depends(get_db)):
 
 # verify otp
 @router.post('/verify-otp')
-def verify_otp(data: VerifyOTP, db: Session = Depends(get_db)):
+async def verify_otp(data: VerifyOTP, db: Session = Depends(get_db)):
     
     existing_user = db.query(User).filter(User.email == data.email).first()
     
@@ -158,6 +226,24 @@ def verify_otp(data: VerifyOTP, db: Session = Depends(get_db)):
     existing_user.otp = None
     
     db.commit()
+    
+    
+    # save notification (unread)
+    notification_message = Notification(
+        user_id=existing_user.id,
+        message="OTP verified",
+        is_read=False
+    )
+
+    db.add(notification_message)
+    db.commit()
+    db.refresh(notification_message)
+
+    # send realtime notification (only if user is connected)
+    await manager.send_to_user(
+        user_id=existing_user.id,
+        message="OTP verified successful"
+    )
     
     return {
         "message": "OTP verified and password reset successfully"
