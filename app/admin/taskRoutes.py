@@ -3,6 +3,7 @@ from sqlalchemy.orm import  Session
 
 from app.db.dependency import get_db
 from app.model.task import Task
+from app.model.notification import Notification
 from app.core.auth import required_role
 from app.schemas.tasks import UpdateTask, CreateTask
 from app.notification.manager import manager
@@ -38,7 +39,22 @@ async def create_task(task: CreateTask,
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
-    await manager.send_personal_message(message="task created")
+    
+    
+    notification_meassage = Notification(
+        user_id = current_user["user_id"],
+        message = "New task created by admin"
+    )
+    
+    db.add(notification_meassage)
+    db.commit()
+    db.refresh(notification_meassage)
+    
+    await manager.send_to_user(
+        user_id=current_user["user_id"],
+        message="Task created"
+    )
+    
     
     return {
         "message": "Admin created task successfully ",
@@ -69,13 +85,12 @@ def admin_view_task(db: Session = Depends(get_db),
     ]
 
 
-
-@router.put('/update-task/{task_id}')
-def admin_update_task(
+@router.put("/update-task/{task_id}")
+async def admin_update_task(
     task_id: int,
     up_task: UpdateTask,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(required_role('admin'))
+    current_user: dict = Depends(required_role("admin"))
 ):
     task = db.query(Task).filter(Task.task_id == task_id).first()
 
@@ -87,11 +102,36 @@ def admin_update_task(
     if not update_data:
         raise HTTPException(status_code=400, detail="No data provided")
 
+    if "task_name" in update_data:
+        existing_task = db.query(Task).filter(
+            Task.task_name == update_data["task_name"],
+            Task.task_id != task_id
+        ).first()
+
+        if existing_task:
+            raise HTTPException(
+                status_code=400,
+                detail="Task name already exists"
+            )
+
     for key, value in update_data.items():
         setattr(task, key, value)
 
     db.commit()
     db.refresh(task)
+
+    notification_message = Notification(
+        user_id=task.user_id,
+        message="Task updated"
+    )
+
+    db.add(notification_message)
+    db.commit()
+
+    await manager.send_to_user(
+        user_id=task.user_id,
+        message="Task updated successfully"
+    )
 
     return {"message": "Task updated"}
 
@@ -99,13 +139,12 @@ def admin_update_task(
 
 @router.delete('/task/{task_id}')
 def delete_task(task_id: int, db: Session = Depends(get_db), current_user: dict = Depends(required_role('admin'))):
-    task = db.query(Task).filter(Task.user_id == task_id).first()
+    task = db.query(Task).filter(Task.task_id == task_id).first()
     
     if not task:
         raise HTTPException(status_code=404, detail='Task not found')
     
     db.delete(task)
     db.commit()
-    db.refresh()
     
     return {"message": "Task deleted"}
