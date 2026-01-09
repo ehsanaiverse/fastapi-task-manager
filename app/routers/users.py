@@ -83,11 +83,17 @@ async def login(user: LoginUser, db: Session = Depends(get_db)):
     access_token = create_token(data=payload)
 
     # save notification (unread)
-    notification_message = Notification(
-        user_id=user_db.id,
-        message="User logged in",
-        is_read=False
-    )
+    if user_db.role == 'admin':
+        notification_message = Notification(
+            user_id=user_db.id,
+            message="Admin logged in",
+            is_read=True
+        )
+    else:
+        notification_message = Notification(
+            user_id=user_db.id,
+            message="User logged in"
+        )
 
     db.add(notification_message)
     db.commit()
