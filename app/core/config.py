@@ -1,4 +1,9 @@
-# DATABSE_URL = "postgresql://neondb_owner:npg_JuQciI1Y9eTg@ep-crimson-sound-advvvxil-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+import os
+from dotenv import load_dotenv
 
-# SECRET_KEY = "This is my secret key"
-# ALGORITHM = "HS256"
+load_dotenv()  # load variables from .env file
+
+SMTP_EMAIL = os.getenv("SMTP_EMAIL")       # your Gmail
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") # your app password
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587 # TLS = modern, secure port
